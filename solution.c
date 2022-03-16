@@ -438,7 +438,7 @@ int validateInput(char* input, Person* person) {
     char* token, * temp, * fieldName, * operator,* value;
     int(*isValid[])(char*) = { isValidName, isValidName, isValidID, isValidGender, isValidAge };//array of isValid functions
     
-    if ((token = strtok(input, " ")) ) { return 0; }
+    if ( !(token = strtok(input, " ")) ) { return 0; }
 
     //check if all person fields are exist and correct. save their value if so 
     for (i = 0; i < FIELDS; i++) {
