@@ -35,7 +35,6 @@ int numOfRows;
 FILE* file;
 
 //===================================functions prototype======================================
-// 
 //file functions
 int isValidName(char* str);
 int isValidID(char* str);
@@ -56,8 +55,8 @@ void printQuery();
 
 //check query functions
 void freeQueryList();
-int isValidQuery(char* query);
-void fetchQuery(char* input);
+char* checkToken(char* query);
+char* parseQuery(char* input);
 
 //add person functions
 char* writeToFile(char* filePath);
@@ -67,7 +66,7 @@ void freeFileData();
 
 //============================================file functions========================================
 int isValidName(char* str) {
-    if (str == NULL) { return 0; }
+    if (!str) { return 0; }
     int i;
     char c;
     for (i = 0, c = str[i]; c != '\0'; c = str[++i]) {
@@ -77,7 +76,7 @@ int isValidName(char* str) {
 }
 //--------------------------------------------------------------------------------------------
 int isValidID(char* str) {
-    if (str == NULL) { return 0; }
+    if (!str) { return 0; }
     int i;
     long number;
     char c;
@@ -92,7 +91,7 @@ int isValidID(char* str) {
 }
 //--------------------------------------------------------------------------------------------
 int isValidGender(char* str) {
-    if (str == NULL) { return 0; }
+    if (!str) { return 0; }
     int i;
     char c;
     for (i = 0, c = str[i]; c != '\0'; c = str[++i]) {
@@ -107,7 +106,7 @@ int isValidGender(char* str) {
 }
 //---------------------------------------------------------------------------------------------
 int isValidAge(char* str) {
-    if (str == NULL) { return 0; }
+    if (!str) { return 0; }
     int i, number;
     char c;
     for (i = 0, c = str[i]; c != '\0'; c = str[i++]) {
@@ -158,7 +157,7 @@ char* copyData(char* filePath) {
     }
 
     if ((fclose(file)) != 0) {
-        return "erro in close file";
+        return "error in close file";
     }
 
     return NULL;
@@ -296,80 +295,66 @@ void freeQueryList() {
     }
 }
 //--------------------------------------------------------------------------------------------
-//return 1 if query token is valid (in form of: <field><operator><value>). 0 if invalid
-int isValidQuery(char* query) {
+//check if query token is valid (in form of: <field><operator><value>) and save it. return NULL if valid, error message if not
+char* checkToken(char* query) {
 
-    char* queryField = NULL, * queryOperator = NULL, * queryValue = NULL;
+    char* tokenField = NULL, * tokenOperator = NULL, * tokenValue = NULL;
     int field, operator, i;
 
-    //check if query's field name is correct (one of the file columns) and save it. return 0 if not
+    //check if token's field name is correct (one of the file columns). return 0 if not
     for (i = 0; i < FIELDS; i++) {
-        queryField = strstr(query, fieldsNames[i]);
-        if (queryField == query) { field = i; break; }
+        tokenField = strstr(query, fieldsNames[i]);
+        if (tokenField == query) { field = i; break; }
     }
-    if (queryField == NULL) { return 0; }
+    if (tokenField == NULL) { return "invalid field name"; }
 
 
-    //check if operator in query is correct (=,<,>,<=,>=). return 0 if not
+    //check if operator in token is correct (=,<,>,<=,>=). return 0 if not
     for (i = 0; i < OPERATORS; i++) {
-        queryOperator = strstr(query, operators[i]);
-        if (queryOperator == query + strlen(fieldsNames[field])) { operator=i; break; }
+        tokenOperator = strstr(query, operators[i]);
+        if (tokenOperator == query + strlen(fieldsNames[field])) { operator=i; break; }
     }
-    if (queryOperator == NULL) { return 0; }
+    if (tokenOperator == NULL) { return "invalid operator"; }
 
 
-    //check if value in query is not empty. return 0 if so
-    if ((queryValue = query + strlen(fieldsNames[field]) + strlen(operators[operator])) == NULL) { return 0; }
+    //check if value in token is not empty. return 0 if so
+    if ((tokenValue = query + strlen(fieldsNames[field]) + strlen(operators[operator])) == NULL) { return "invalid value"; }
 
 
-    //if came here, the query is correct. save query in queries list
+    //if came here, the query is correct. create new Query from the token
     Query* temp = (Query*)malloc(sizeof(Query));
-    if (!temp) {
-        printf("error in allocation memory\n");
-        return 1;
-    }
+    if (!temp) { return "error in allocation memory"; }
     temp->field = field;
     temp->operator = operator;
-    strcpy(temp->value, queryValue);
+    strcpy(temp->value, tokenValue);
 
     //insert query to list
     temp->nextNode = queriesList;
     queriesList = temp;
 
-    return 1;
+    return NULL;
 }
 //--------------------------------------------------------------------------------------------
-//parse query. go back to main loop when done
-void fetchQuery(char* input) {
+//parse query. save if correct. return NULL if query should be prined or error message if not
+char* parseQuery(char* input) {
 
-    char* token = strtok(input, " ");
+    char *message, *token = strtok(input, " ");
 
     while (1) { //check query and continue parsing it while "and" entered
 
-        //check if query is valid. if not, go back to main loop
-        if (!isValidQuery(token)) {
-            printf("enter valid command\n");
-            freeQueryList();
-            return;
+        if ( (message = checkToken(token)) != NULL) { //check if query valid. return the error message if not.
+            return message;
         }
 
-        //if query finished, print it and go back to main loop
         token = strtok(NULL, " ");
-        if (token == NULL) {
-            printQuery();
-            freeQueryList();
-            return;
+
+        if (!token) { return NULL; }//if query finished and should be printed, return NULL to main loop
+
+        if (strcmp(token, "and")) {//if query continues but without "and". return error message to main loop.
+            return "enter valid command";
         }
 
-        //if query continues but without "and". print error and go back to main loop 
-        if (strcmp(token, "and")) {
-            printf("enter valid command\n");
-            freeQueryList();
-            return;
-        }
-
-        //if came here, input is valid and continues with "and", so continue parsing input.
-        token = strtok(NULL, " ");
+        token = strtok(NULL, " ");//continue parsing input if token is valid and continues with "and".
     }
 }
 //====================================add person functions=======================================
@@ -406,7 +391,7 @@ char* writeToFile(char* filePath) {
 }
 //-----------------------------------------------------------------------------------------------
 //insert given person (whether new or updated) to the data in memory. 
-//return NULL in success or char* that describe the error
+//return NULL in success or error message
 char* updateMemory(Person* person) {
 
     int i, updateIndex = numOfRows; //by defult will update at the end of the array
@@ -438,7 +423,7 @@ int validateInput(char* input, Person* person) {
     char* token, * temp, * fieldName, * operator,* value;
     int(*isValid[])(char*) = { isValidName, isValidName, isValidID, isValidGender, isValidAge };//array of isValid functions
     
-    if ( !(token = strtok(input, " ")) ) { return 0; }
+    if ( !(token = strtok(NULL, " ")) ) { return 0; }
 
     //check if all person fields are exist and correct. save their value if so 
     for (i = 0; i < FIELDS; i++) {
@@ -520,8 +505,15 @@ int main(int argc, char* argv[]) {
                 printf("enter valid person\n");
             }
 
-            else if (token) { //if input isn't "set" or "quit". fetch the query.
-                fetchQuery(input);
+            else if (token) { //if came here, input isn't "set" or "quit". parse the query, print if correct
+               
+                if ( (message = parseQuery(input)) != NULL ) { //if query isnt correct, print message.
+                    printf("%s\n", message);
+                }
+                else {
+                    printQuery(); //if query is correct, print the query's results
+                }
+                freeQueryList(); //free query list of previous input
             }
         }
         freeFileData();
