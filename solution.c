@@ -33,6 +33,7 @@ Person** fileData;
 Query* queriesList;
 int numOfRows;
 FILE* file;
+char helpMessage[] = "\nto end program enter \"quit\".\nto insert new person enter \"set first_name=<correct name> last_name=<correct name> ID=<9 digits> gender=<male/female> age=<0-120>\".\nto get data enter query in the form of \"<some field><operator><value>\".\nfields are: first_name, last_name, ID, gender, age\n";
 
 //===================================functions prototype======================================
 //file functions
@@ -50,8 +51,7 @@ void mergeSort(Person** array, int left_side, int right_side);
 //printing functions
 int shouldPrint(Person* person);
 void printPerson(Person* person);
-void printFile();
-void printQuery();
+void printData(int isQuery);
 
 //check query functions
 void freeQueryList();
@@ -129,7 +129,7 @@ char* copyData(char* filePath) {
     int i, currentRow = -1;
     char line[FIELDS * FIELDSIZE], * token;
     Person* person;
-    int(*isValid[])(char*) = { isValidName, isValidName, isValidID, isValidGender, isValidAge };//array of isValid functions
+    int(*isValid[])(char*) = { isValidName, isValidName, isValidID, isValidGender, isValidAge };//array of validate functions pointers
 
     numOfRows = 0;
     while (fgets(line, FIELDS * FIELDSIZE, file) != NULL) { //find number of rows for allocate enough space
@@ -140,9 +140,9 @@ char* copyData(char* filePath) {
         return "error in allocate array of Person*";
     }
 
-    //read data, allocate person for each row. if some field is incorrect, insert illegaleValue
+    //read data, allocate person for each row. if some field is incorrect, insert invalidValue
     rewind(file);
-    while ((fgets(line, FIELDS * FIELDSIZE, file)) != NULL) {
+    while ((fgets(line, sizeof(line), file)) != NULL) {
 
         if ((person = (Person*)calloc(1, sizeof(Person))) == NULL) {
             return "error in allocate Person";
@@ -150,7 +150,7 @@ char* copyData(char* filePath) {
 
         token = strtok(line, ",\n ");
         for (i = 0; i < FIELDS; i++) {
-            (isValid[i](token)) ? strcpy(person->data[i], token) : strcpy(person->data[i], invalidValue);
+            strcpy(person->data[i], ((isValid[i](token)) ? token : invalidValue) );//copy value if correct, invalidValue if isn't
             token = strtok(NULL, ",\n ");
         }
         fileData[++currentRow] = person;
@@ -168,13 +168,18 @@ int compare(Person* first, Person* second) {
     return strcmp(first->data[last_name], second->data[last_name]);
 }
 //-------------------------------------------------------------------------------------------
-//merges sub arrays to sorted one
+//merges two sub arrays to sorted one
 void merge(Person** array, int left_side, int middle, int right_side)
 {
     int i = left_side, j = middle + 1, k = 0;
-    Person** temp_array = (Person**)malloc(((right_side - left_side) + 1) * sizeof(Person*));
-    while (i <= middle && j <= right_side) {
-        if ((compare(array[i], array[j])) < 1) {//if array [i] <= array[j]
+    Person** temp_array = (Person**)malloc(((right_side - left_side) + 1) * sizeof(Person*)); //help array to hold the sorted elements
+
+    while (i <= middle && j <= right_side) {//run untill one of the arrays ends
+
+        //the idea: compare two current elements in both arrays and store the smaller element in help array. 
+        //then increment the index of current element (in array of smaller elemnt) and compare again.
+        //keep doing untill one of the arrays ends. 
+        if ((compare(array[i], array[j])) < 1) {
             temp_array[k] = array[i];
             i = i + 1;
         }
@@ -184,17 +189,20 @@ void merge(Person** array, int left_side, int middle, int right_side)
         }
         k = k + 1;
     }
-    while (i <= middle) { //if values are left in the left array copy them to temp_array
+    
+    while (i <= middle) { //when two arrays finished, copy to help array the rest elements of left array
         temp_array[k] = array[i];
         k = k + 1;
         i = i + 1;
     }
-    while (j <= right_side) { //if values are left in the right array copy them temp_array
+
+    while (j <= right_side) { //when two arrays finished, copy to help array the rest elements of right array
         temp_array[k] = array[j];
         k = k + 1;
         j = j + 1;
     }
-    //this for copies the values from the temp array to the original array
+
+    //copy values from help array to the original array
     for (i = left_side, k = 0; i <= right_side; i++, k++) {
         array[i] = temp_array[k];
     }
@@ -236,12 +244,12 @@ int shouldPrint(Person* person) {
                     return 0;
                 }
             }
-            if (personAge == queryAge) {
+            else if (personAge == queryAge) {
                 if (!strcmp(op, "<") || !strcmp(op, ">")) {
                     return 0;
                 }
             }
-            if (personAge > queryAge) {
+            else if (personAge > queryAge) {
                 if (!strcmp(op, "=") || !strcmp(op, "<") || !strcmp(op, "<=")) {
                     return 0;
                 }
@@ -261,25 +269,22 @@ int shouldPrint(Person* person) {
 void printPerson(Person* person) {
     int i;
     for (i = 0; i < FIELDS; i++) {
-        printf("%s ", person->data[i]);
+        printf("%12s", person->data[i]);
     }
     printf("\n");
 }
 //--------------------------------------------------------------------------------------------
-//print all file
-void printFile() {
-    printf("\n");
+//print rows. if the call isn't query (isQuery=0), print all. if it's query, print only match elements
+void printData(int isQuery) {
+    
     int i;
-    for (i = 0; i < numOfRows; i++) {
-        printPerson(fileData[i]);
+    for (i = 0; i < FIELDS; i++) {   //print table headers
+        printf("%12s", fieldsNames[i]);
     }
-}
-//--------------------------------------------------------------------------------------------
-//print all persons (file's rows) that meets the query's requirements
-void printQuery() {
-    int i;
+    printf("\n\n");
+
     for (i = 0; i < numOfRows; i++) {
-        if (shouldPrint(fileData[i])) {
+        if ( isQuery==0 || (isQuery==1 && shouldPrint(fileData[i])) ){  //print Person if it isn't query or it matches the query
             printPerson(fileData[i]);
         }
     }
@@ -391,7 +396,7 @@ char* writeToFile(char* filePath) {
 }
 //-----------------------------------------------------------------------------------------------
 //insert given person (whether new or updated) to the data in memory. 
-//return NULL in success or error message
+//return NULL in success or error message if failed
 char* updateMemory(Person* person) {
 
     int i, updateIndex = numOfRows; //by defult will update at the end of the array
@@ -410,33 +415,31 @@ char* updateMemory(Person* person) {
         numOfRows++;
     }
 
-    for (i = 0; i < FIELDS; i++) {
+    for (i = 0; i < FIELDS; i++) { //copy new data to the memory
         strcpy(fileData[updateIndex]->data[i], person->data[i]);
     }
     return NULL;
 }
 //-----------------------------------------------------------------------------------------------
-//parse and validate input. if correct, insert values to given person and return 1. return 0 if input isn't valid
+//get input and Person to put input in him. parse and validate input. if correct, insert values to given person and return 1. return 0 if input isn't valid
 int validateInput(char* input, Person* person) {
 
     int i;
-    char* token, * temp, * fieldName, * operator,* value;
+    char* token, * field, * operator,* value;
     int(*isValid[])(char*) = { isValidName, isValidName, isValidID, isValidGender, isValidAge };//array of isValid functions
-    
-    if ( !(token = strtok(NULL, " ")) ) { return 0; }
 
     //check if all person fields are exist and correct. save their value if so 
     for (i = 0; i < FIELDS; i++) {
-        token = strtok(NULL, " ");
 
-        temp = strstr(token, fieldsNames[i]);
-        if (temp == NULL || temp != token) { return 0; }
-        fieldName = fieldsNames[i];
+        if ((token = strtok(NULL, " ")) == NULL) { return 0; } //get the next token in input 
 
-        operator = strstr(token + strlen(fieldName), "=");
-        if (operator == NULL || operator != token + strlen(fieldName)) { return 0; }
+        field = strstr(token, fieldsNames[i]);  //check if first part in token is the current field. return 0 if not
+        if (field == NULL || field != token) { return 0; }
 
-        value = token + strlen(fieldName) + strlen("=");
+        operator = strstr(token + strlen(fieldsNames[i]), "=");  //check if second part in token is "=". return 0 if not
+        if (operator == NULL || operator != token + strlen(fieldsNames[i])) { return 0; }
+
+        value = token + strlen(fieldsNames[i]) + strlen("=");  //check if third part in token is exist. return 0 if not
         if (value == NULL) { return 0; }
 
         if (!isValid[i](value)) { return 0; }//check if value is correct. each field has validate function of his own
@@ -444,7 +447,7 @@ int validateInput(char* input, Person* person) {
         strcpy(person->data[i], value); //put parsed value In the appropriate field
     }
 
-    return 1; //if came here, the input is valid. return 1
+    return 1; //if came here, the input is valid. return 1 (the input details are inside the person already)
 }
 //=========================================main functions============================================
 //free allocated memory
@@ -470,20 +473,23 @@ int main(int argc, char* argv[]) {
             printf("%s\n", message);
             return 1;
         }
-        printf("copied data\n");
         mergeSort(fileData, 0, numOfRows - 1); //sort data array
 
-        printFile(); //print all file first
+        printData(0); //print all file first
 
         //program main loop. scan input from user until quit or insert data. if input is correct query, print it
         while (1) {
 
-            printf("\n%c", 26);
+            printf("\nenter command (for help enter \"help\"): ");
             gets(input);
             strcpy(copiedInput, input);
             token = strtok(copiedInput, " ");
 
-            if (strcmp(token, "quit") == 0) { //quit program if token is "quit"
+            if (strcmp(token, "help") == 0) {
+                printf(helpMessage);
+            }
+
+            else if (strcmp(token, "quit") == 0) { //quit program if token is "quit"
                 printf("quiting program...\n");
                 freeFileData();
                 return 0;
@@ -511,7 +517,7 @@ int main(int argc, char* argv[]) {
                     printf("%s\n", message);
                 }
                 else {
-                    printQuery(); //if query is correct, print the query's results
+                    printData(1); //if query is correct, print the query's results
                 }
                 freeQueryList(); //free query list of previous input
             }
